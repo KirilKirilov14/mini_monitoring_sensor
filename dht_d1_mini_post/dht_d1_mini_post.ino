@@ -1,8 +1,6 @@
 /**
    PostHTTPClient.ino
-
     Created on: 21.11.2016
-
 */
 //Wifi
 #include <ESP8266WiFi.h>
@@ -132,14 +130,13 @@ void loop() {
 
     Serial.print("[HTTP] begin...\n");
     // configure traged server and url
-    http.begin(client, "http://192.168.0.105:8000/post"); //HTTP
+    http.begin(client, "http://192.168.0.105:8000/api/device/postSensorData"); //HTTP
     http.addHeader("Content-Type", "application/json");
 
     Serial.print("[HTTP] POST...\n");
-    // start connection and send HTTP header and body
-    int httpCode = http.POST("{\"deviceKey\": \"device-kitchen\",\"temperature\": " + String(temp) + ",\"humidity\": " + String(hum) + ", \"userid\": 1}");
 
-    // httpCode will be negative on error
+    int httpCode = http.POST("{\"deviceKey\": \"device-kitchen\",\"sensorData\": {\"Temperature\": " +  String(temp)+", \"Humidity\":"  + String(hum) + "}, \"userid\": 1}");
+    
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
       Serial.printf("[HTTP] POST... code: %d\n", httpCode);
@@ -159,5 +156,5 @@ void loop() {
   }
 
 
-  delay(10000);
+  delay(60000);
 }
