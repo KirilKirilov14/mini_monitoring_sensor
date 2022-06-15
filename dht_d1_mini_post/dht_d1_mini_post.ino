@@ -6,11 +6,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 
-//added following-for the dht temperature sensor:
-#include <Adafruit_Sensor.h>
 #include <DHT.h>
-#include <DHT_U.h>
-
 
 /* this can be run with an emulated server on host:
         cd esp8266-core-root-dir
@@ -28,22 +24,14 @@
 #endif
 
 //Temperature sensor
+#define DHTPIN D2 //pin gpio 2 in sensor
+#define DHTTYPE DHT22 // DHT 22 Change this if you have a DHT11
 
-#define DHTPIN 2     // Digital pin connected to the DHT sensor 
-// Feather HUZZAH ESP8266 note: use pins 3, 4, 5, 12, 13 or 14 --
-// Pin 15 can work but DHT must be disconnected during program upload.
+DHT dht(DHTPIN, DHTTYPE);
 
-// Uncomment the type of sensor in use:
-#define DHTTYPE    DHT11     // DHT 11
-//#define DHTTYPE    DHT22     // DHT 22 (AM2302)
-//#define DHTTYPE    DHT21     // DHT 21 (AM2301)
-
-// See guide for details on sensor wiring and usage:
-//   https://learn.adafruit.com/dht/overview
-
-DHT_Unified dht(DHTPIN, DHTTYPE);
-
-uint32_t delayMS;
+float t, h;
+unsigned long previousMillis = 0; // will store last temp was read
+const long interval = 2000; // interval at which to read sensor
 
 void setup() {
   //Setup for the Wifi
@@ -66,65 +54,46 @@ void setup() {
   //Setup for the temperature sensor
   // Initialize device.
   dht.begin();
-  Serial.println(F("DHTxx Unified Sensor Example"));
-  // Print temperature sensor details.
-  sensor_t sensor;
-  dht.temperature().getSensor(&sensor);
-  Serial.println(F("------------------------------------"));
-  Serial.println(F("Temperature Sensor"));
-  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("째C"));
-  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("째C"));
-  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("째C"));
-  Serial.println(F("------------------------------------"));
-  // Print humidity sensor details.
-  dht.humidity().getSensor(&sensor);
-  Serial.println(F("Humidity Sensor"));
-  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("%"));
-  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("%"));
-  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
-  Serial.println(F("------------------------------------"));
-  // Set delay between sensor readings based on sensor details.
-  delayMS = sensor.min_delay / 1000;
+ 
+}
+
+void gettemperature() {
+  // Wait at least 2 seconds seconds between measurements.
+  // if the difference between the current time and last time you read
+  // the sensor is bigger than the interval you set, read the sensor
+  // Works better than delay for things happening elsewhere also
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval) {
+    // save the last time you read the sensor
+    previousMillis = currentMillis;
+
+    // Reading temperature for humidity takes about 250 milliseconds!
+    // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
+    h = dht.readHumidity(); // Read humidity (percent)
+    t = dht.readTemperature(); // Read temperature as C
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+  }
+}
+
+void readSensorData() {
+  // Reading from DHT
+  gettemperature();
+  Serial.print("temp:");
+  Serial.println(t);
+  Serial.print("humi:");
+  Serial.println(h);
 }
 
 void loop() {
   // wait for WiFi connection
   if ((WiFi.status() == WL_CONNECTED)) {
+    readSensorData();
 
-    //Read values from the dht sensor-temperature and humidity
-    delay(delayMS);
-    // Get temperature event and print its value.
-    sensors_event_t event;
-    dht.temperature().getEvent(&event);
-    float temp = 0;
-    float hum = 0;
-    if (isnan(event.temperature)) {
-      Serial.println(F("Error reading temperature!"));
-    }
-    else {
-      Serial.print(F("Temperature: "));
-      temp = event.temperature;
-      Serial.print(temp);
-      Serial.println(F("째C"));
-    }
-    // Get humidity event and print its value.
-    dht.humidity().getEvent(&event);
-    if (isnan(event.relative_humidity)) {
-      Serial.println(F("Error reading humidity!"));
-    }
-    else {
-      Serial.print(F("Humidity: "));
-      hum = event.relative_humidity;
-      Serial.print(hum);
-      Serial.println(F("%"));
-    }
-    //End reading values
     WiFiClient client;
     HTTPClient http;
 
@@ -135,7 +104,7 @@ void loop() {
 
     Serial.print("[HTTP] POST...\n");
 
-    int httpCode = http.POST("{\"deviceKey\": \"device-kitchen\",\"sensorData\": {\"Temperature\": " +  String(temp)+", \"Humidity\":"  + String(hum) + "}, \"userid\": 1}");
+    int httpCode = http.POST("{\"deviceKey\": \"device-kitchen\",\"sensorData\": {\"Temperature\": " +  String(t)+", \"Humidity\":"  + String(h) + "}, \"userid\": 1}");
     
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
